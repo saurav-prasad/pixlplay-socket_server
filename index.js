@@ -60,18 +60,7 @@ io.on('connection', (socket) => {
                 //collaborators
                 if (isCanvasCollaboratorPresent(canv_id, userId)) {
                     socket.join(`canvas_${canv_id}`)
-                    io.to(`canvas_${canv_id}`).emit('collaborator-joined', {
-                        collaborators: [...canvasCollaborators[canv_id], {
-                            username: onlineUsers[canvasAdminMap[canv_id]].username,
-                            userId: onlineUsers[canvasAdminMap[canv_id]].userId,
-                            profilePhoto: onlineUsers[canvasAdminMap[canv_id]].profilePhoto
-                        }],
-                        canvasId: canv_id
-                    }); // update other users  
-                }
-                // admin
-                if (Object.keys(canvasAdminMap).includes(canv_id)) {
-                    if (canvasAdminMap[canv_id] === userId) {
+                    if (onlineUsers[canvasAdminMap[canv_id]]) {
                         io.to(`canvas_${canv_id}`).emit('collaborator-joined', {
                             collaborators: [...canvasCollaborators[canv_id], {
                                 username: onlineUsers[canvasAdminMap[canv_id]].username,
@@ -79,7 +68,22 @@ io.on('connection', (socket) => {
                                 profilePhoto: onlineUsers[canvasAdminMap[canv_id]].profilePhoto
                             }],
                             canvasId: canv_id
-                        });
+                        }); // update other users  
+                    }
+                }
+                // admin
+                if (Object.keys(canvasAdminMap).includes(canv_id)) {
+                    if (canvasAdminMap[canv_id] === userId) {
+                        if (onlineUsers[canvasAdminMap[canv_id]]) {
+                            io.to(`canvas_${canv_id}`).emit('collaborator-joined', {
+                                collaborators: [...canvasCollaborators[canv_id], {
+                                    username: onlineUsers[canvasAdminMap[canv_id]].username,
+                                    userId: onlineUsers[canvasAdminMap[canv_id]].userId,
+                                    profilePhoto: onlineUsers[canvasAdminMap[canv_id]].profilePhoto
+                                }],
+                                canvasId: canv_id
+                            });
+                        }
                         canvasCollaborators[canv_id]?.map(({ userId }) => {
                             io.to(onlineUsers[userId]?.socketId).emit("error", { message: 'Admin is Online.' })
                         })
