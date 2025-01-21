@@ -166,6 +166,9 @@ io.on('connection', (socket) => {
                 // console.log(onlineUsers)
                 io.to(adminUser.socketId).emit("error", { message: "User already joined the canvas." })
             } else {
+                console.log(isCanvasCollaboratorPresent(canvasId, toUserId))
+                console.log(recipient)
+                console.log(adminUser)
                 socket.emit("error", { message: "Something went wrong" })
             }
         } catch (error) {
