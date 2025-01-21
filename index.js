@@ -315,6 +315,7 @@ io.on('connection', (socket) => {
                 io.to(`canvas_${canvasId}`).emit('collaborator-leaved', { userId, canvasId });
                 io.to(`canvas_${canvasId}`).emit('error', { message: `${onlineUsers[userId].username} left.` });
                 socket.emit("can-leave-canvas", { success: true })
+                socket.leave(`canvas_${canvasId}`)
             } else {
                 socket.emit("can-leave-canvas", { success: false })
             }
