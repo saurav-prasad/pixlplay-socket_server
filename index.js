@@ -31,12 +31,24 @@ function isCanvasCollaboratorPresent(canvasId, userId) {
     return flag
 }
 
+function mapAllCollaboratorCanvases(userId) {
+    let canvasArr = []
+    Object.keys(canvasCollaborators).map((id) => {
+        canvasCollaborators[id].map(data => {
+            if (data.userId === userId) {
+                canvasArr.push({ canvasId: id, canvasName: data.canvasName })
+            }
+        })
+    })
+    return canvasArr
+}
+
 io.on('connection', (socket) => {
-    try {
 
 
-        // When a user goes online **
-        socket.on("online", ({ userId, username, profilePhoto }) => {
+    // When a user goes online **
+    socket.on("online", ({ userId, username, profilePhoto }) => {
+        try {
             // console.log(userId, username, profilePhoto)
             if (userId && username) {
                 onlineUsers[userId] = { socketId: socket.id, username, userId, profilePhoto };
@@ -77,10 +89,14 @@ io.on('connection', (socket) => {
                     }
                 }
             })
-        })
+        } catch (error) {
+            console.error(error)
+        }
+    })
 
-        // When the user disconnects
-        socket.on('disconnect', () => {
+    // When the user disconnects
+    socket.on('disconnect', () => {
+        try {
             const disconnectedUser = Object.keys(onlineUsers).find(userId => onlineUsers[userId].socketId === socket.id);
 
             if (disconnectedUser) {
@@ -102,34 +118,51 @@ io.on('connection', (socket) => {
                 })
 
             };
+        } catch (error) {
+            console.error(error)
+        }
+    });
 
-        });
+    // get all the canvas id of current collaborator
+    socket.on("get-all-collaborator-canvases", () => {
+        const userId = Object.keys(onlineUsers).find(id => onlineUsers[id].socketId === socket.id)
 
-        // Invite a user **
-        socket.on('invite-user', ({ toUserId, canvasId, lines }) => {
+        const data = mapAllCollaboratorCanvases(userId)
+        socket.emit("all-collaborator-canvases", data)
+    })
+
+    // Invite a user **
+    socket.on('invite-user', ({ toUserId, canvasId, lines, canvasName }) => {
+        try {
             const recipient = onlineUsers[toUserId]
             const adminUser = onlineUsers[Object.keys(onlineUsers).find(id => onlineUsers[id].socketId === socket.id)]
-            if (recipient && !isCanvasCollaboratorPresent(canvasId, toUserId)) {
+            if (recipient && !isCanvasCollaboratorPresent(canvasId, toUserId) && adminUser) {
                 canvasAdminMap[canvasId] = adminUser.userId // asssign admin for canvasId
                 socket.join(`canvas_${canvasId}`);
                 io.to(recipient.socketId).emit('receive-invitation', {
                     canvasId,
+                    canvasName,
                     adminUserId: adminUser.userId,
                     adminProfilePhoto: adminUser.profilePhoto,
                     username: adminUser.username,
                 });
                 // console.log(lines)
                 canvasesState[canvasId] = lines
-            } else {
+            } else if (isCanvasCollaboratorPresent(canvasId, toUserId)) {
                 // console.log(adminUser)
                 // console.log(onlineUsers)
                 io.to(adminUser.socketId).emit("error", { message: "User already joined the canvas." })
+            } else {
+                socket.emit("error", { message: "Something went wrong" })
             }
-        });
+        } catch (error) {
+            console.error(error)
+        }
+    });
 
-
-        // Accept invitation **
-        socket.on('accept-invitation', ({ canvasId, adminUserId }) => {
+    // Accept invitation **
+    socket.on('accept-invitation', ({ canvasId, adminUserId, canvasName }) => {
+        try {
             // check if admin is online
             const recipient = onlineUsers[adminUserId];
             if (!recipient) {
@@ -155,9 +188,13 @@ io.on('connection', (socket) => {
                 canvasCollaborators[canvasId].push({
                     userId,
                     profilePhoto: onlineUsers[userId].profilePhoto,
-                    username: onlineUsers[userId].username
+                    username: onlineUsers[userId].username,
+                    canvasName
+
                 });
                 socket.join(`canvas_${canvasId}`); // join the user to the room
+                const data = mapAllCollaboratorCanvases(userId)
+                socket.emit("all-collaborator-canvases", data)
                 // join the admin to the room
                 // io.to(recipient.socketId).socketsJoin(socket.id);
                 io.to(`canvas_${canvasId}`).emit('collaborator-joined', {
@@ -173,11 +210,15 @@ io.on('connection', (socket) => {
                 const adminOfCanvases = Object.keys(canvasAdminMap).filter(id => canvasAdminMap[id] === adminUserId)
                 io.to(recipient.socketId).emit('get-admin-of-canvases', adminOfCanvases);
             }
+        } catch (error) {
+            console.error(error)
+        }
 
-        });
+    });
 
-        // Canvas update **
-        socket.on('canvas-update', ({ canvasId, lines }) => {
+    // Canvas update **
+    socket.on('canvas-update', ({ canvasId, lines }) => {
+        try {
             const userId = Object.keys(onlineUsers).find(id => onlineUsers[id].socketId === socket.id);
 
             // if current user is not present in canvasCollaborators 
@@ -185,13 +226,17 @@ io.on('connection', (socket) => {
             //     socket.emit('error', { code: 'CANVAS_ACCESS_DENIED', message: 'You are not authorized to work on this canvas.' });
             //     return;
             // }
-            console.log(onlineUsers[userId]?.username)
+            // console.log(onlineUsers[userId]?.username)
             io.to(`canvas_${canvasId}`).emit('updated-canvas', { lines, canvasId });
             canvasesState[canvasId] = lines
-        });
+        } catch (error) {
+            console.error(error)
+        }
+    });
 
-        // Check canvas accessibility by current user **
-        socket.on('if-canvas-accessable', ({ canvasId }) => {
+    // Check canvas accessibility by current user **
+    socket.on('if-canvas-accessable', ({ canvasId }) => {
+        try {
             const userId = Object.keys(onlineUsers).find(id => onlineUsers[id].socketId === socket.id);
 
             if (isCanvasCollaboratorPresent(canvasId, userId)) {
@@ -199,23 +244,37 @@ io.on('connection', (socket) => {
             } else {
                 io.to(socket.id).emit("canvas-accessable", { success: false, message: "Access denied." });
             }
-        });
+        } catch (error) {
+            console.error(error)
+        }
+    });
 
-        // when canvas is deleted **
-        socket.on('delete-canvas', (canvasId) => {
+    // when canvas is deleted **
+    socket.on('delete-canvas', (canvasId) => {
+        try {
             // canvas can only be deleted by the admin
             const userId = Object.keys(onlineUsers).find(id => onlineUsers[id].socketId === socket.id);
             if (canvasAdminMap[canvasId] == userId) {
                 io.to(`canvas_${canvasId}`).emit('canvas-deleted', {
                     message: 'The canvas has been deleted by the admin.',
                 });
-                delete canvasCollaborators[canvasId];
+                canvasCollaborators[canvasId].map((data) => {
+                    const newData = mapAllCollaboratorCanvases(data.userId)
+                    io.to(`canvas_${canvasId}`).emit("all-collaborator-canvases", newData)
+                    io.to(`canvas_${canvasId}`).emit('collaborator-leaved', { userId: data.userId, canvasId });
+                    io.to(`canvas_${canvasId}`).emit("error", { message: "Admin deleted the canvas." })
+                })
+                delete canvasCollaborators[canvasId]
                 delete canvasAdminMap[canvasId]
             }
-        });
+        } catch (error) {
+            console.error(error)
+        }
+    });
 
-        // when user is removed by the admin
-        socket.on('remove-user', ({ adminUserId, canvasId, toUserId }) => {
+    // when user is removed by the admin
+    socket.on('remove-user', ({ adminUserId, canvasId, toUserId }) => {
+        try {
             const recipient = onlineUsers[toUserId]
             if (recipient && isCanvasCollaboratorPresent(canvasId, toUserId) && (canvasAdminMap[canvasId] === adminUserId)) {
                 const newCanvasCollaborators = canvasCollaborators[canvasId].filter(({ userId }) => userId !== toUserId)
@@ -223,10 +282,43 @@ io.on('connection', (socket) => {
                 io.to(`canvas_${canvasId}`).emit('collaborator-leaved', { userId: toUserId, canvasId });
                 io.to(recipient.socketId).emit("error", { message: "You were removed by the admin." })
             }
-        })
-    } catch (error) {
-        console.error(error)
-    }
+        } catch (error) {
+            console.error(error)
+        }
+    })
+
+    // when user leave the canvas
+    socket.on('leave-canvas', ({ canvasId }) => {
+        try {
+            const userId = Object.keys(onlineUsers).find(id => onlineUsers[id].socketId === socket.id);
+            if (isCanvasCollaboratorPresent(canvasId, userId)) {
+                const newCanvasCollaborators = canvasCollaborators[canvasId].filter((data) => data.userId !== userId)
+                canvasCollaborators[canvasId] = [...newCanvasCollaborators]
+                const data = mapAllCollaboratorCanvases(userId)
+                socket.emit("all-collaborator-canvases", data)
+                io.to(`canvas_${canvasId}`).emit('collaborator-leaved', { userId, canvasId });
+                io.to(`canvas_${canvasId}`).emit('error', { message: `${onlineUsers[userId].username} left.` });
+                socket.emit("can-leave-canvas", { success: true })
+            } else {
+                socket.emit("can-leave-canvas", { success: false })
+            }
+        } catch (error) {
+            console.error(error)
+        }
+    })
+    // check if canvas can be leaved
+    socket.on('can-leave-canvas', (canvasId) => {
+        try {
+            const userId = Object.keys(onlineUsers).find(id => onlineUsers[id].socketId === socket.id);
+            if (isCanvasCollaboratorPresent(canvasId, userId)) {
+                socket.emit("if-leave-canvas", { success: true })
+            } else {
+                socket.emit("if-leave-canvas", { success: false })
+            }
+        } catch (error) {
+            console.error(error)
+        }
+    })
 });
 
 
