@@ -3,17 +3,19 @@ const http = require('http');
 const { Server } = require('socket.io');
 require('dotenv').config()
 
-
 const app = express()
 const server = http.createServer(app)
 const port = process.env.PORT || 8080
 
+
 // socket server initilization
 const io = new Server(server, {
     cors: {
-        origin: "*"
+        origin: "*",
+        methods: ["GET", "POST"],
+        credentials: true
     }
-})
+});
 
 // State variables
 let onlineUsers = {}; // { userId, username, profilePhoto,socketId }
