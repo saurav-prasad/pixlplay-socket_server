@@ -49,6 +49,7 @@ io.on('connection', (socket) => {
     // When a user goes online **
     socket.on("online", ({ userId, username, profilePhoto }) => {
         try {
+            console.log({ userId, username, profilePhoto })
             // console.log(userId, username, profilePhoto)
             if (userId && username) {
                 onlineUsers[userId] = { socketId: socket.id, username, userId, profilePhoto };
