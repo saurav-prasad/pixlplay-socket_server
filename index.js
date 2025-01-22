@@ -18,7 +18,7 @@ const io = new Server(server, {
 });
 
 // State variables
-let onlineUsers = {}; // { userId, username, profilePhoto,socketId }
+let onlineUsers = {}; // { userId: {userId username, profilePhoto,socketId} }
 let canvasAdminMap = {}; // { canvasId: adminUserId }
 let canvasCollaborators = {}; // { canvasId: [ { userId, username, profilePhoto },] }
 let canvasesState = {} // { canvasId: lines }
@@ -47,26 +47,36 @@ function mapAllCollaboratorCanvases(userId) {
 
 io.on('connection', (socket) => {
 
+    // check if the user is already logged in
+    socket.on("check-if-logged-in", (userId) => {
+        if (onlineUsers[userId]) {
+            socket.emit('if-logged-in', { success: true, message: "User loggedin already." })
+        } else {
+            socket.emit("if-logged-in", { success: false, message: "You can login safely." })
+        }
+    })
+
+    // on signout remove user from onlineusers object
+    socket.on("log-out", (userId) => {
+        if (onlineUsers[userId]) {
+            delete onlineUsers[userId];
+        }
+    })
 
     // When a user goes online **
     socket.on("online", ({ userId, username, profilePhoto }) => {
         try {
             // console.log(socket)
-            console.log(socket.id)
-            console.log({ userId, username, profilePhoto })
             // console.log(userId, username, profilePhoto)
             if (userId && username) {
                 onlineUsers[userId] = { socketId: socket.id, username, userId, profilePhoto };
                 // Emit the list of online users
                 io.emit("get-online-users", onlineUsers);
-                console.log(" 1 object")
             }
             // notify the collaborators that user joined the associated canvas
             Object.keys(canvasCollaborators).forEach(canv_id => {
                 //collaborators
-                console.log(" 2 object")
                 if (isCanvasCollaboratorPresent(canv_id, userId)) {
-                    console.log(" 3 object")
                     socket.join(`canvas_${canv_id}`)
                     if (onlineUsers[canvasAdminMap[canv_id]]) {
                         io.to(`canvas_${canv_id}`).emit('collaborator-joined', {
@@ -81,7 +91,6 @@ io.on('connection', (socket) => {
                 }
                 // admin
                 if (Object.keys(canvasAdminMap).includes(canv_id)) {
-                    console.log(" 4 object")
                     if (canvasAdminMap[canv_id] === userId) {
                         if (onlineUsers[canvasAdminMap[canv_id]]) {
                             io.to(`canvas_${canv_id}`).emit('collaborator-joined', {
